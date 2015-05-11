@@ -16,6 +16,7 @@ from filehandler import DatastorageFileHandler
 from imagefilehandler import ImageFileHandler
 from fft import FFT
 from barplotanimation import BarplotAnimation
+from fluctuationspectra import FluctuationSpectra
 
 #
 # CONFIGURATION
@@ -28,7 +29,7 @@ FILE_SUFFIX_FFT     = ".fft"
 XCUT = (91, 91+266)
 YCUT = (646, 646+252)
 
-LIMIT = 5
+LIMIT = 2000
 OFFSET = 0
 
 Y_SCALE = 100
@@ -38,7 +39,9 @@ NUM_OF_BINS = 37
 BAR_WIDTH = 1.0
 BAR_COLOR = 'b'
 
+#
 # DO NOT MODIFY DOWN HERE
+#
 def getFilename(path, pre, suf):
     return os.path.join(path, pre+suf)
 
@@ -74,7 +77,19 @@ def createFFT():
     plot.show()
     contourStorage.close()
 
+def createFluctuationSpectra():
+    contourStorage = DatastorageFileHandler.load(contourFilename)
+    plot = FluctuationSpectra()
+
+    for value in contourStorage:
+        plot.addVariance(value)
+
+    plot.plot()
+    contourStorage.close()
+    plot.show()
+
 if __name__ == '__main__':
     #createContours()
-    createFFT()
+    #createFFT()
+    createFluctuationSpectra()
     # createWhatever

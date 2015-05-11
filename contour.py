@@ -51,12 +51,32 @@ class Contour:
         else:
             return self.contourPath
 
+    def calculateDistance(self, p1, p2):
+        return np.sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2)
+
     def calculateCentroid(self):
         a = (0,0)
-        for p in self.contourPath:
-            a = (a[0] + p[0], a[1] + p[1])
+        N = len(self.contourPath)
+        L = 0
+        for i in range(0, N):
+            pm = self.contourPath[i-1]
+            p0 = self.contourPath[i]
+            try:
+                pp = self.contourPath[i+1]
+            except IndexError:
+                pp = self.contourPath[0]
+            dm = self.calculateDistance(pm, p0)
+            di = self.calculateDistance(p0, pp)
+            x = a[0] + p0[0]*(dm)
+            y = a[1] + p0[1]*(di)
+            #x = a[0] + p0[0]
+            #y = a[1] + p0[1]
+            a = (x, y)
+            L = L + di
+
         a = np.array(a)
-        c = a/len(self.contourPath)
+        #c = a/(len(self.contourPath))
+        c = a*1/(L) # 2*L is way too much, L is correct
         return (int(round(c[0])), int(round(c[1])))
 
     def setMatrix(self, imageMatrix):
@@ -138,8 +158,10 @@ class Contour:
             print("Out of Boundary")
         except NoConvergenceError:
             print("No Convergence")
-            for p in contourPath:
-                self.imageMatrix[p[1],[0]] = self.imageMatrix.max()
+
+        for p in contourPath:
+            self.imageMatrix[p[1],p[0]] = self.imageMatrix.max()*5
+        plt.imsave("debug.png", self.imageMatrix)
 
         self.contourPath = contourPath
 

@@ -10,6 +10,9 @@
 #-------------------------------------------------------------------------------
 
 import numpy as np
+import matplotlib.pyplot as plt
+
+from transform import cartesian2radian
 
 class FFT:
     points = []
@@ -25,11 +28,12 @@ class FFT:
         binWidth = 360/bins
         n = len(self.points)
         # Get coordinates
-        con_x = np.array([i[0] for i in self.points])
-        con_y = np.array([i[1] for i in self.points])
+        con_r, con_p = cartesian2radian(self.points)
+        #con_x = np.array([i[0] for i in self.points])
+        #con_y = np.array([i[1] for i in self.points])
         # Convert to polar coordinates
-        con_r = np.sqrt(con_x**2 + con_y**2)
-        con_p = np.arctan2(con_x, con_y) * (-180/np.pi) + 180
+        #con_r = np.sqrt(con_x**2 + con_y**2)
+        #con_p = np.arctan2(con_x, con_y) * (-180/np.pi) + 180
         con_b = con_p//binWidth
         # Prepare bin
         bin_arr = [[] for i in range(0, bins)]
@@ -37,6 +41,7 @@ class FFT:
         for i in range(0, n):
             b = int(con_b[i])
             bin_arr[b].append(con_r[i])
+
         for i in range(0, bins):
             bin_arr[i] = sum(bin_arr[i])/len(bin_arr[i])
         # Actual Fourier-Transformation
