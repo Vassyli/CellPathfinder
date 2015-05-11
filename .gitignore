@@ -1,3 +1,6 @@
+# Ignore example files for now
+example-video/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
