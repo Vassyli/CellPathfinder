@@ -25,7 +25,7 @@ class FluctuationSpectra:
         for i in r:
             rA = rA + i**2
             rB = rB + i
-        a = rA/len(points)
+        a = rA/(len(points))
         b = rB/len(points)
         self.variance.append(a - b**2)
 

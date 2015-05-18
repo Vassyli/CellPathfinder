@@ -43,7 +43,10 @@ class FFT:
             bin_arr[b].append(con_r[i])
 
         for i in range(0, bins):
-            bin_arr[i] = sum(bin_arr[i])/len(bin_arr[i])
+            if len(bin_arr[i]) > 0:
+                bin_arr[i] = sum(bin_arr[i])/len(bin_arr[i])
+            else:
+                bin_arr[i] = 0
         # Actual Fourier-Transformation
         f = (np.fft.fft(bin_arr))
         if includeFirst:
