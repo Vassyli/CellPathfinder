@@ -13,12 +13,13 @@ import os
 import argparse
 import numpy as np
 
-from contour import Contour, AlternativeContour, NoConvergenceError
+from contour import Contour, AlternativeContour, NoConvergenceError, OutOfBoundaryError
 from filehandler import DatastorageFileHandler
 from imagefilehandler import ImageFileHandler
 from fft import FFT
 from barplotanimation import BarplotAnimation
 from fluctuationspectra import FluctuationSpectra
+from startpointdetector import StartpointDetector
 
 #
 # CONFIGURATION
@@ -27,17 +28,25 @@ from fluctuationspectra import FluctuationSpectra
 #FILE_SUFFIX = ".tif"
 #FILE_PATH   = "./example-video"
 FILE_PREFIX = "transition"
+#FILE_PREFIX = "iso_singlecell_F"
+#FILE_PREFIX = "hyp3_singlecell_D"
 FILE_SUFFIX = ".tif"
-FILE_PATH   = ".\\example-video\\05-07-dev1-hyp3"
+FILE_PATH   = ".\\example-video\\05-08-dev1-hyp1"
 FILE_SUFFIX_CONTOUR = ".contour"
 FILE_SUFFIX_FFT     = ".fft"
 #XCUT = (91, 91+266)
 #YCUT = (646, 646+252)
-X_CUT = (00, 280)
-Y_CUT = (950, 1200)
+X_CUT = (530, 530+262)
+Y_CUT = (533, 533+276)
+#X_CUT = (00, 280)
+#Y_CUT = (950, 1200)
 STARTSEARCH_Y = 100 #180
 
-LIMIT = 16740
+# Settings for Startpoint Detection
+X_TRANS_CUT = (0, 800)
+Y_TRANS_CUT = (0, 200)
+
+LIMIT = 100000
 OFFSET = 0
 
 #LIMIT = 1
@@ -97,10 +106,26 @@ def getFilename(path, pre, suf):
 
 contourFilename = getFilename(FILE_PATH, FILE_PREFIX, FILE_SUFFIX_CONTOUR)
 
+def findTransition():
+    fh = ImageFileHandler(FILE_PATH, FILE_PREFIX, FILE_SUFFIX)
+    fh.set_limit(LIMIT, OFFSET)
+    fh.cut(X_TRANS_CUT, Y_TRANS_CUT)
+
+    trans = StartpointDetector()
+
+    for framenumber, frame in fh:
+        if framenumber%100 == 0:
+            print("Frame Number", framenumber)
+        trans.append(frame, sourcetype = trans.fromPIL)
+
+    trans.plot()
+    trans.show()
+
 def createContours():
     fh = ImageFileHandler(FILE_PATH, FILE_PREFIX, FILE_SUFFIX)
     fh.set_limit(LIMIT, OFFSET)
-    fh.cut(X_CUT, Y_CUT)
+    if len(X_CUT) == 2 and len(Y_CUT) == 2:
+        fh.cut(X_CUT, Y_CUT)
 
     contourStorage = DatastorageFileHandler.new(contourFilename)
 
@@ -108,14 +133,20 @@ def createContours():
         if framenumber%100 == 0:
             print("Frame Number ", framenumber)
         #c = Contour.fromPIL(frame)
-        c = AlternativeContour.fromPIL(frame)
+        #c = AlternativeContour.fromPIL(frame)
+        c = Contour.fromPIL(frame)
         c.setWeight(WEIGHT_MATRIX)
         try:
             c.applyDoubleSobel()
             c.findContour(yAxis = STARTSEARCH_Y)
-            contourStorage.append(c.getContour(True))
+            con = c.getContour(True)
+            if len(con) > 0:
+                contourStorage.append(con)
         except NoConvergenceError as e:
-            print("[E] Skipped frame ", framenumber)
+            print("[E] Skipped frame (NC)", framenumber)
+            continue
+        except OutOfBoundaryError as e:
+            print("[E] Skipped frame (OoB)", framenumber)
             continue
 
     contourStorage.close()
@@ -135,17 +166,6 @@ def createFFT():
     plot.show()
     contourStorage.close()
 
-def createFluctuationSpectra():
-    contourStorage = DatastorageFileHandler.load(contourFilename)
-    plot = FluctuationSpectra()
-
-    for value in contourStorage:
-        plot.addVariance(value)
-
-    plot.plot()
-    contourStorage.close()
-    plot.show()
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run some CellPathfinder methods')
 
@@ -159,7 +179,10 @@ if __name__ == '__main__':
     elif '2' in args.method:
         createFFT()
     elif '3' in args.method:
-        createFluctuationSpectra()
+        #createFluctuationSpectra()
+        pass
+    elif '4' in args.method:
+        findTransition()
     else:
         raise ValueError("--method should only be 1, 2 or 3")
 

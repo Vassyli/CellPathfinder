@@ -31,6 +31,16 @@ DEFAULT_ALTERNATIVE_WEIGHT_MATRIX = np.array([
     [0, 0, 0, 0, 0],
 ])
 
+class NewContour:
+    image = None
+
+    def __init__(self, image):
+        self.setMatrix(image)
+
+    def setMatrix(self, imageMatrix):
+        self.imageMatrix = imageMatrix
+        self.width, self.height = self.imageMatrix.shape
+
 class Contour:
     imageMatrix = None
     width = 0
@@ -427,7 +437,21 @@ class AlternativeContour:
         value. Then it multiplies the result with *-1 to make the biggest gradients
         the darkest colour in order to work with the blackness-contour-detection """
         a = self.imageMatrix
-        self.imageMatrix = abs(nd.filters.sobel(a,1)) + abs(nd.filters.sobel(a,0)) + abs(nd.filters.sobel(a,-1)) + abs(nd.filters.sobel(a, -2))
+        sobA = nd.filters.sobel(a,1)
+        sobB = nd.filters.sobel(a,0)
+        sobC = nd.filters.sobel(a,-1)
+        sobD = nd.filters.sobel(a,-2)
+
+        sobA = sobA - sobA.min()
+        sobA = abs(sobA - sobA.max()//2)
+        sobB = sobB - sobB.min()
+        sobB = abs(sobB - sobB.max()//2)
+        sobC = sobC - sobC.min()
+        sobC = abs(sobC - sobC.max()//2)
+        sobD = sobD - sobD.min()
+        sobD = abs(sobD - sobD.max()//2)
+
+        self.imageMatrix = sobA**2 + sobB**2
         self.imageMatrix*=-1
         self.imageMatrix+=self.imageMatrix.min()
 
@@ -701,9 +725,13 @@ class AlternativeContour:
             for p in realContour:
                 self.imageMatrix[p[1],p[0]] = self.imageMatrix.max()
             plt.imsave("debug-doublealgo.png", self.imageMatrix)
+
+            self.contourPath = upperContour
         except Exception as e:
             print(e, type(e))
             traceback.print_exc()
+
+            self.contourPath = []
 
 
 
@@ -715,7 +743,6 @@ class AlternativeContour:
 ##            shrunk.imageMatrix[p[1],p[0]] = m
 ##        plt.imsave("debug-small.png", shrunk.imageMatrix)
         # For now
-        self.contourPath = upperContour
 
     def getDirection(self, p1, p2):
         if p2[1] < p1[1]:
