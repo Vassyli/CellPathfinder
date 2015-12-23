@@ -11,7 +11,7 @@
 
 import matplotlib.pyplot as plt
 
-from transform import cartesian2radian
+from . import transform
 
 class FluctuationSpectra:
     variance = []
@@ -19,7 +19,7 @@ class FluctuationSpectra:
         pass
 
     def addVariance(self, points):
-        r, p = cartesian2radian(points)
+        r, p = transform.cartesian2radian(points)
         rA = 0
         rB = 0
         for i in r:

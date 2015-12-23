@@ -12,7 +12,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from transform import cartesian2radian
+try:
+    from . import transform
+except SystemError:
+    try:
+        import transform
+    except SystemError:
+        pass
 
 class FFT:
     points = []
@@ -28,7 +34,7 @@ class FFT:
         binWidth = 360/bins
         n = len(self.points)
         # Get coordinates
-        con_r, con_p = cartesian2radian(self.points)
+        con_r, con_p = transform.cartesian2radian(self.points)
         #con_x = np.array([i[0] for i in self.points])
         #con_y = np.array([i[1] for i in self.points])
         # Convert to polar coordinates

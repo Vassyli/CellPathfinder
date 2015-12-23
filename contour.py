@@ -15,12 +15,18 @@ import scipy.ndimage as nd
 import matplotlib.pyplot as plt
 from skimage import feature
 
+##DEFAULT_WEIGHT_MATRIX = np.array([
+##    [0, 0, 0, 0, 0],
+##    [0, 1, 1, 1, 0],
+##    [0, 1, 1, 1, 0],
+##    [0, 1, 1, 1, 0],
+##    [0, 0, 0, 0, 0],
+##])
+
 DEFAULT_WEIGHT_MATRIX = np.array([
-    [0, 0, 0, 0, 0],
-    [0, 1, 1, 1, 0],
-    [0, 1, 1, 1, 0],
-    [0, 1, 1, 1, 0],
-    [0, 0, 0, 0, 0],
+    [1, 1, 1],
+    [1, 1, 1],
+    [1, 1, 1],
 ])
 
 DEFAULT_ALTERNATIVE_WEIGHT_MATRIX = np.array([
@@ -33,13 +39,115 @@ DEFAULT_ALTERNATIVE_WEIGHT_MATRIX = np.array([
 
 class NewContour:
     image = None
+    width = None
+    height = None
+
+    _contour =[]
 
     def __init__(self, image):
         self.setMatrix(image)
 
-    def setMatrix(self, imageMatrix):
-        self.imageMatrix = imageMatrix
-        self.width, self.height = self.imageMatrix.shape
+    def setMatrix(self, image):
+        self.image = image
+        self.width, self.height = self.image.shape
+
+    def fromPIL(frame):
+        frame = frame.convert("I")
+        c = __class__(np.array(frame))
+        return c
+
+    fromPIL = staticmethod(fromPIL)
+
+    def findContour(self, yAxis = None, xAxis = None, minPathLength = 200, levels = 8):
+        if yAxis == None:
+            yAxis = self.height//2
+        if xAxis == None:
+            xAxis = self.width//2
+        # Search for highest slope
+        slopes = []
+        lookat = 10
+        xy_range = range(-lookat, lookat+1)
+        for x in range(lookat, xAxis-lookat):
+            slope = np.polyfit(xy_range, self.image[yAxis,x-lookat:x+lookat+1], 1)[0]
+            slopes.append((slope, (x, yAxis)))
+        maxslope_point_x = np.array(min(slopes)[1])
+        for y in range(lookat, yAxis-lookat):
+            slope = np.polyfit(xy_range, self.image[y-lookat:y+lookat+1,xAxis], 1)[0]
+            slopes.append((slope, (xAxis, y)))
+        maxslope_point_y = np.array(min(slopes)[1])
+
+        contour_plot = plt.contour(self.image, levels)
+        possible_contours = []
+        for i in range(0, levels):
+            try:
+                contour_paths = contour_plot.collections[i].get_paths()
+                for p in contour_paths:
+                    if len(p) > minPathLength:
+                        if p.contains_point(maxslope_point_x) and \
+                            p.contains_point(maxslope_point_x + (1,0)) and \
+                            p.contains_point(maxslope_point_x - (1,0)) == False:
+                                possible_contours.append(p)
+            except IndexError:
+                pass
+        if len(possible_contours) > 1:
+            index = 0
+            contour_points = []
+            for p in possible_contours:
+                contour_points.append(p.contains_point(maxslope_point_y) \
+                    + p.contains_point(maxslope_point_y + (0,1)) \
+                    + p.contains_point(maxslope_point_y - (0,1)) \
+                    )
+                index+=1
+            definiteContour = possible_contours[contour_points.index(min(contour_points))]
+        elif len(possible_contours) > 0:
+            definiteContour = possible_contours[0]
+        else:
+            print("Contour not found.")
+            return False
+
+        for a in definiteContour.iter_segments():
+            self._contour.append(a[0])
+
+    def getContour(self, centered = True):
+        if centered == True:
+            centroid = self.calculateCentroid()
+            # Transform all coordinates
+            contour = []
+            for p in self._contour:
+                contour.append((
+                    p[0] - centroid[0],
+                    p[1] - centroid[1]
+                ))
+            return contour
+        else:
+            return self._contour
+
+    def calculateDistance(self, p1, p2):
+        return np.sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2)
+
+    def calculateCentroid(self):
+        a = (0,0)
+        N = len(self._contour)
+        L = 0
+        for i in range(0, N):
+            pm = self._contour[i-1]
+            p0 = self._contour[i]
+            try:
+                pp = self._contour[i+1]
+            except IndexError:
+                pp = self._contour[0]
+            dm = self.calculateDistance(pm, p0)
+            di = self.calculateDistance(p0, pp)
+            x = a[0] + p0[0]*(dm)
+            y = a[1] + p0[1]*(di)
+            a = (x, y)
+            L = L + di
+
+        a = np.array(a)
+        c = a*1/(L) # 2*L is way too much, L is correct
+        return (c[0], c[1])
+
+
 
 class Contour:
     imageMatrix = None
@@ -968,3 +1076,263 @@ class AlternativeContour:
 
         subMatrix = self.imageMatrix[y-weight_y_dim:y+weight_y_dim+1,x-weight_x_dim:x+weight_x_dim+1]/self.weightcount
         return subMatrix.sum()
+
+class WhiteContour(Contour):
+    imageMatrix = None
+    width = 0
+    height = 0
+    weight = None
+    contourPath = []
+
+    DIRECTION_UP = 0
+    DIRECTION_UPRIGHT = 1
+    DIRECTION_RIGHT = 2
+    DIRECTION_DOWNRIGHT = 3
+    DIRECTION_DOWN = 4
+    DIRECTION_DOWNLEFT = 5
+    DIRECTION_LEFT = 6
+    DIRECTION_UPLEFT = 7
+
+    def __init__(self, imageMatrix):
+        self.setMatrix(imageMatrix)
+        self.setWeight(DEFAULT_WEIGHT_MATRIX)
+
+    def getContour(self, centered = True):
+        ret = np.array(self.contourPath)
+        ret2 = np.array(self.contourPath)
+        ret[:,1] = ret2[:,0]
+        ret[:,0] = ret2[:,1]
+        return ret
+
+    def setMatrix(self, imageMatrix):
+        self.imageMatrix = imageMatrix
+        self.width, self.height = self.imageMatrix.shape
+
+    def findContour(self, yAxis = None, untilX = None, maxsteps = 2000, minsteps = 100, checkPoints = 15):
+        if yAxis == None:
+            yAxis = self.height//2
+        if untilX == None:
+            untilX = self.width//2
+
+        max_white = (-1, self.imageMatrix.min())
+
+        for x in range(0, untilX):
+            try:
+                white = self.getWhiteness(x, yAxis)
+            except OutOfBoundaryError:
+                white = self.imageMatrix.min()
+            #print(x, black, self.imageMatrix[yAxis,x])
+
+            if white <= max_white[1]:
+                continue
+
+            max_white = (x, white)
+
+        contourPath = []
+        contourPath.append((max_white[0], yAxis))
+        nanana = False
+        #print(contourPath)
+
+        # Search the contour
+        i = 0
+        try:
+            while(True):
+                nextPoint = self.findNextPoint(contourPath, checkPoints)
+                if i > maxsteps:
+                    raise NoConvergenceError("Maxsteps reached (%i)" % (maxsteps,))
+                if i > minsteps:
+                    # Minimum steps reached => check if we have reached the first point!
+                    if abs(contourPath[0][0] - nextPoint[0]) <= 1 and abs(contourPath[0][1] - nextPoint[1]) <= 1:
+                        contourPath.append(nextPoint)
+                        break
+                    if nextPoint in contourPath:
+##                        newPath = []
+##                        app = False
+##                        for p in contourPath:
+##                            if app == True:
+##                                newPath.append(p)
+##                            else:
+##                                if p == nextPoint:
+##                                    app = True
+##                        newPath.append(nextPoint)
+##                        contourPath = newPath
+                        break
+                contourPath.append(nextPoint)
+                i+=1
+                r = None
+        except OutOfBoundaryError:
+            print("Out of Boundary")
+            r = OutOfBoundaryError
+        except NoConvergenceError:
+            print("No Convergence")
+            r = NoConvergenceError
+
+        self.contourPath = contourPath
+
+        if r != None:
+            raise r
+
+    def findNextPoint(self, contourPath, checkPoints = 15):
+        # Get newest point
+        xi, yi = contourPath[-1]
+
+        # Get points which have to be searched in order to determine the direction
+        directionMask, direction = self.getDirectionMask(contourPath, checkPoints)
+
+        # Calculate the blackness of those points
+        whitesearch_intensities = []
+        for point in directionMask:
+            whitesearch_intensities.append(self.getWhiteness(point[0], point[1]))
+
+        # Get minimum black
+        maxwhite = max(whitesearch_intensities)
+
+        # Get the actual point by minium black
+        nextPoint = (0, 0)
+        for i in range(0, len(directionMask)):
+            if whitesearch_intensities[i] == maxwhite:
+                nextPoint = directionMask[i]
+
+
+        #print(contourPath[-1], self.getWhiteness(contourPath[-1][0], contourPath[-1][1]), directionMask, direction)
+
+        # Return next point
+        return nextPoint
+
+    def getDirectionMask(self, contourPath, checkPoints = 15):
+        # Calculate direction or use default direction
+        if len(contourPath) >= checkPoints:
+            # Get the last 10 points
+            slopseq = contourPath[-checkPoints:]
+            # Get difference in y and x direction
+            y_diff = slopseq[-1][1] - slopseq[0][1]
+            x_diff = slopseq[-1][0] - slopseq[0][0]
+            # Get direction
+            if x_diff == 0:
+                if y_diff < 0:
+                    direction = self.DIRECTION_UP
+                else:
+                    direction = self.DIRECTION_DOWN
+            elif y_diff == 0:
+                if x_diff > 0:
+                    direction = self.DIRECTION_RIGHT
+                else:
+                    direction = self.DIRECTION_LEFT
+            else:
+                s = y_diff/x_diff
+                if x_diff > 0 and y_diff < 0:
+                    # s is negative
+                    if s < -2:
+                        direction = self.DIRECTION_UP
+                    elif s >= -2 and s <= -0.5:
+                        direction = self.DIRECTION_UPRIGHT
+                    else:
+                        direction = self.DIRECTION_RIGHT
+                elif x_diff > 0 and y_diff > 0:
+                    # s is positive
+                    if s < 0.5:
+                        direction = self.DIRECTION_RIGHT
+                    elif s >= 0.5 and s <= 2:
+                        direction = self.DIRECTION_DOWNRIGHT
+                    else:
+                        direction = self.DIRECTION_DOWN
+                elif x_diff < 0 and y_diff > 0:
+                    # s is negative
+                    if s < -2:
+                        direction = self.DIRECTION_DOWN
+                    elif s >= -2 and s <= -0.5:
+                        direction = self.DIRECTION_DOWNLEFT
+                    else:
+                        direction = self.DIRECTION_LEFT
+                else:
+                    # s is positive again
+                    if s < 0.5:
+                        direction = self.DIRECTION_LEFT
+                    elif s >= 0.5 and s <= 2:
+                        direction = self.DIRECTION_UPLEFT
+                    else:
+                        direction = self.DIRECTION_UP
+        else:
+            direction = self.DIRECTION_UP
+
+
+        xi, yi = contourPath[-1]
+
+        # Get direction mask
+        if direction == self.DIRECTION_UP:
+            blacksearch_points = [
+                #(xi-1,yi), # left
+                (xi-1,yi-1), # top-left
+                (xi, yi-1), # top
+                (xi+1, yi-1), # top-right
+                #(xi+1, yi), # right
+            ]
+        elif direction == self.DIRECTION_UPRIGHT:
+            blacksearch_points = [
+                (xi, yi-1), # top
+                (xi+1, yi-1), # top-right
+                (xi+1, yi), # right
+            ]
+        elif direction == self.DIRECTION_RIGHT:
+            blacksearch_points = [
+                #(xi, yi-1), # top
+                (xi+1, yi-1), # top-right
+                (xi+1, yi), # right
+                (xi+1, yi+1), # bottom-right
+                #(xi, yi+1), # bottom
+            ]
+        elif direction == self.DIRECTION_DOWNRIGHT:
+            blacksearch_points = [
+                (xi+1, yi), # right
+                (xi+1, yi+1), # bottom-right
+                (xi, yi+1), # bottom
+            ]
+        elif direction == self.DIRECTION_DOWN:
+            blacksearch_points = [
+                #(xi+1, yi), # right
+                (xi+1, yi+1), # bottom-right
+                (xi, yi+1), # bottom
+                (xi-1, yi+1), # bottom-left
+                #(xi-1, yi), # left
+            ]
+        elif direction == self.DIRECTION_DOWNLEFT:
+            blacksearch_points = [
+                (xi, yi+1), # bottom
+                (xi-1, yi+1), # bottom-left
+                (xi-1, yi), # left
+            ]
+        elif direction == self.DIRECTION_LEFT:
+            blacksearch_points = [
+                #(xi, yi+1), # bottom
+                (xi-1, yi+1), # bottom-left
+                (xi-1, yi), # left
+                (xi-1, yi-1), # top-left
+                #(xi, yi-1), # top
+            ]
+        elif direction == self.DIRECTION_UPLEFT:
+            blacksearch_points = [
+                (xi-1, yi), # left
+                (xi-1, yi-1), # top-left
+                (xi, yi-1), # top
+            ]
+
+        return blacksearch_points, direction
+
+    def getWhiteness(self, x, y):
+        # Get weight matrix dimensions
+        weight_x_dim, weight_y_dim = self.weight.shape
+        # Calculate how many times we need to look "left/right" and "top/bottom"
+        weight_x_dim//=2
+        weight_y_dim//=2
+        # Check if we have enough place to calculate the blackness (OutOfBoundaryError)
+        if y < weight_y_dim or y >= (self.height - weight_y_dim - 1)  or x  < weight_x_dim or x >= (self.width - weight_x_dim - 1):
+            raise OutOfBoundaryError("Out of boundary: (%i,%i)" %(x,y))
+
+        subMatrix = (self.imageMatrix[y-weight_y_dim:y+weight_y_dim+1,x-weight_x_dim:x+weight_x_dim+1])
+        if 0 in subMatrix:
+            #print("Zero!")
+            r = 0
+        else:
+            #print(subMatrix)
+            r = ((subMatrix*self.weight)/self.weightcount).sum()
+        return r

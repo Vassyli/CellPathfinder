@@ -17,6 +17,7 @@ class BarplotAnimation:
     fig = None
     ax = None
     bars = None
+    ani = None
 
     numOfBins = 0
 
@@ -30,7 +31,7 @@ class BarplotAnimation:
         self.ax.set_ylim(ylim[0], ylim[1])
 
     def animate(self, generator):
-        ani = animation.FuncAnimation(self.fig, self._animateHelper, generator)
+        self.ani = animation.FuncAnimation(self.fig, self._animateHelper, generator, interval=10, save_count = 30000)
 
     def _animateHelper(self, i):
         for a in range(0, self.numOfBins):
@@ -38,3 +39,8 @@ class BarplotAnimation:
 
     def show(self):
         plt.show()
+
+    def save(self, filename, artist = 'Me'):
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=60, metadata=dict(artist='Basilius Sauter'))
+        self.ani.save(filename, writer=writer)

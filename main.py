@@ -13,7 +13,7 @@ import os
 import argparse
 import numpy as np
 
-from contour import Contour, AlternativeContour, NoConvergenceError, OutOfBoundaryError
+from contour import Contour, AlternativeContour, NewContour, NoConvergenceError, OutOfBoundaryError
 from filehandler import DatastorageFileHandler
 from imagefilehandler import ImageFileHandler
 from fft import FFT
@@ -134,10 +134,11 @@ def createContours():
             print("Frame Number ", framenumber)
         #c = Contour.fromPIL(frame)
         #c = AlternativeContour.fromPIL(frame)
-        c = Contour.fromPIL(frame)
-        c.setWeight(WEIGHT_MATRIX)
+        #c = Contour.fromPIL(frame)
+        c = NewContour.fromPIL(frame)
+        #c.setWeight(WEIGHT_MATRIX)
         try:
-            c.applyDoubleSobel()
+            #c.applyDoubleSobel()
             c.findContour(yAxis = STARTSEARCH_Y)
             con = c.getContour(True)
             if len(con) > 0:
